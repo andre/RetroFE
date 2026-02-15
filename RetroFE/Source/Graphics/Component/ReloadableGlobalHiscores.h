@@ -32,7 +32,10 @@ public:
     ReloadableGlobalHiscores(Configuration& config, std::string textFormat,
         Page& p, int displayOffset,
         FontManager* font,
-        float baseColumnPadding, float baseRowPadding);
+        float baseColumnPadding, float baseRowPadding,
+        std::string renderType,
+        float qrDelaySec,
+        float qrFadeSec);
     ~ReloadableGlobalHiscores() override;
 
     bool  update(float dt) override;
@@ -70,6 +73,12 @@ private:
         BottomCenter,
         RightMiddle,
         LeftMiddle
+    };
+
+    enum class RenderMode {
+        Both,
+        QrOnly,
+        TableOnly
     };
 
 
@@ -202,6 +211,9 @@ private:
     // --- QR configuration ---
     QrPlacement qrPlacement_;   // where to place QR codes
     int         qrMarginPx_;    // margin between QR and panel
+    RenderMode  renderMode_;    // both/table-only/qr-only
+    bool        renderTable_;
+    bool        renderQr_;
 
     // Layout cache (populated in Stage 1, reused in Stage 2)
     std::vector<TableLayout> cachedTableLayouts_;
