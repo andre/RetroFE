@@ -59,6 +59,7 @@
 #endif
 
 #if defined(__linux) || defined(__APPLE__)
+#include <csignal>
 #include <cstring>
 #include <errno.h>
 #include <sys/stat.h>
@@ -75,6 +76,12 @@
 #include <Windows.h>
 #include "StdAfx.h"
 #endif
+
+std::atomic<bool> RetroFE::reloadRequested_{false};
+
+void RetroFE::handleSigusr1(int) {
+	reloadRequested_.store(true);
+}
 
 RetroFE::RetroFE(Configuration& c)
 	: initialized(false), initializeError(false), initializeThread(NULL), config_(c), db_(NULL), metadb_(NULL),
@@ -798,6 +805,11 @@ bool RetroFE::run() {
 	bool running = true;
 	state_ = RETROFE_NEW;
 
+#ifndef WIN32
+	// SIGUSR1 triggers a live layout XML hot-reload
+	signal(SIGUSR1, RetroFE::handleSigusr1);
+#endif
+
 	config_.getProperty(OPTION_ATTRACTMODETIME, attractModeTime);
 	config_.getProperty(OPTION_ATTRACTMODENEXTTIME, attractModeNextTime);
 	config_.getProperty(OPTION_ATTRACTMODEPLAYLISTTIME, attractModePlaylistTime);
@@ -943,6 +955,15 @@ bool RetroFE::run() {
 				|| !currentPage_->isGraphicsIdle()
 				|| currentPage_->isPlaylistScrolling()
 				|| currentPage_->isGamesScrolling()));
+
+		// Check for pending hot-reload (SIGUSR1). Only act when safe: idle, at root depth.
+		if (!splashMode && reloadRequested_.exchange(false)
+			&& state_ == RETROFE_IDLE && pages_.empty()
+			&& currentPage_ && currentPage_->isIdle())
+		{
+			LOG_INFO("RetroFE", "SIGUSR1 received – reloading layout XML");
+			setState(RETROFE_RELOAD_REQUEST);
+		}
 
 		if (!splashMode && state_accepts_input(state_)) {
 			RETROFE_STATE inputState = processUserInput(currentPage_);
@@ -2693,6 +2714,57 @@ bool RetroFE::run() {
 				running = false;
 			}
 			break;
+
+			// Trigger exit animation, then swap the page
+			case RETROFE_RELOAD_REQUEST:
+			currentPage_->stop();
+			setState(RETROFE_RELOAD_EXECUTE);
+			break;
+
+			// Wait for exit animation, then rebuild the page from XML
+			case RETROFE_RELOAD_EXECUTE:
+			if (currentPage_->isGraphicsIdle())
+			{
+				// Snapshot navigation state
+				std::string colName   = currentPage_->getCollectionName();
+				std::string playlist  = currentPage_->getPlaylistName();
+				size_t      offset    = currentPage_->getScrollOffsetIndex();
+				auto        offsets   = currentPage_->getLastPlaylistOffsets();
+
+				// Detach the CollectionInfo so deInitialize() won't delete it
+				CollectionInfo* collection = currentPage_->detachCollection();
+
+				// Tear down old page
+				currentPage_->freeGraphicsMemory();
+				currentPage_->deInitialize();
+				delete currentPage_;
+				currentPage_ = nullptr;
+
+				// Flush cached textures so changed image files are reloaded
+				Image::cleanupTextureCache();
+
+				// Build fresh page from XML on disk
+				currentPage_ = loadPage(colName);
+				if (currentPage_)
+				{
+					currentPage_->pushCollection(collection);
+					currentPage_->selectPlaylist(playlist);
+					currentPage_->setScrollOffsetIndex(offset);
+					currentPage_->setLastPlaylistOffsets(offsets);
+					currentPage_->setLocked(kioskLock_);
+					currentPage_->allocateGraphicsMemory();
+					currentPage_->start();
+					LOG_INFO("RetroFE", "Layout hot-reload complete");
+				}
+				else
+				{
+					LOG_ERROR("RetroFE", "Hot-reload failed: could not build page for " + colName);
+					// Fatal – can't continue without a page
+					running = false;
+				}
+				setState(RETROFE_NEW);
+			}
+			break;
 		}
 
 
@@ -2894,6 +2966,8 @@ std::string RetroFE::stateToString(RETROFE_STATE s) const {
 		case RETROFE_QUIT: return "RETROFE_QUIT";
 		case RETROFE_SCROLL_PLAYLIST_FORWARD: return "RETROFE_SCROLL_PLAYLIST_FORWARD";
 		case RETROFE_SCROLL_PLAYLIST_BACK: return "RETROFE_SCROLL_PLAYLIST_BACK";
+		case RETROFE_RELOAD_REQUEST: return "RETROFE_RELOAD_REQUEST";
+		case RETROFE_RELOAD_EXECUTE: return "RETROFE_RELOAD_EXECUTE";
 		default: return "UNKNOWN_STATE_" + std::to_string(s);
 	}
 }
@@ -3096,6 +3170,11 @@ inline bool RetroFE::state_accepts_input(RetroFE::RETROFE_STATE s) {
 		case RETROFE_MENUJUMP_ENTER:
 		case RETROFE_SPLASH_EXIT:
 		case RETROFE_QUIT:
+		return false;
+
+		// reload states also block input
+		case RETROFE_RELOAD_REQUEST:
+		case RETROFE_RELOAD_EXECUTE:
 		return false;
 
 		// safe places to read/apply input
