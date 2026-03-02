@@ -78,9 +78,14 @@
 #endif
 
 std::atomic<bool> RetroFE::reloadRequested_{false};
+std::atomic<bool> RetroFE::sighupReceived_{false};
 
 void RetroFE::handleSigusr1(int) {
 	reloadRequested_.store(true);
+}
+
+void RetroFE::handleSighup(int) {
+	sighupReceived_.store(true);
 }
 
 RetroFE::RetroFE(Configuration& c)
@@ -808,6 +813,8 @@ bool RetroFE::run() {
 #ifndef WIN32
 	// SIGUSR1 triggers a live layout XML hot-reload
 	signal(SIGUSR1, RetroFE::handleSigusr1);
+	// SIGHUP triggers a clean restart (re-reads all configuration)
+	signal(SIGHUP, RetroFE::handleSighup);
 #endif
 
 	config_.getProperty(OPTION_ATTRACTMODETIME, attractModeTime);
@@ -963,6 +970,16 @@ bool RetroFE::run() {
 		{
 			LOG_INFO("RetroFE", "SIGUSR1 received – reloading layout XML");
 			setState(RETROFE_RELOAD_REQUEST);
+		}
+
+		// Check for SIGHUP: trigger a clean restart so all configuration is re-read.
+		// Wait until we are out of splash mode and not already shutting down.
+		if (!splashMode && sighupReceived_.exchange(false)
+			&& state_ != RETROFE_QUIT_REQUEST && state_ != RETROFE_QUIT)
+		{
+			LOG_INFO("RetroFE", "SIGHUP received – restarting to reload configuration");
+			reboot_ = true;
+			setState(RETROFE_QUIT_REQUEST);
 		}
 
 		if (!splashMode && state_accepts_input(state_)) {
