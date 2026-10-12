@@ -89,7 +89,7 @@ FontManager* FontCache::getFont(const std::string& fontPath, int maxFontSize, SD
     return nullptr;
 }
 
-std::string FontCache::buildFontKey(std::string font, int maxFontSize, SDL_Color color, bool gradient, int outlinePx, int monitor) {
+std::string FontCache::buildFontKey(std::string font, int maxFontSize, SDL_Color /*color*/, bool gradient, int outlinePx, int monitor) {
     std::stringstream ss;
     // Fix: Dropped RGB parameters. Color is a rendering property, not a font geometry property.
     ss << font << "_SIZE=" << maxFontSize;

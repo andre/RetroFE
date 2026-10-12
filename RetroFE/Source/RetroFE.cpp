@@ -177,7 +177,6 @@ void RetroFE::render() {
 	// --- Live Work and Window Stats ---
 	static double displayedWorkMsLive = 0.0;
 	static uint64_t lastWorkLateUpdatePerfTicks = 0;
-	static double workSumMsInWindow = 0.0;
 	static double lateSumUsInWindow = 0.0;
 	static double lateMaxUsInWindow = 0.0;
 	static double displayedLateAvgUs = 0.0;
@@ -242,7 +241,6 @@ void RetroFE::render() {
 
 		displayedWorkMsLive = 0.0;
 		lastWorkLateUpdatePerfTicks = 0;
-		workSumMsInWindow = 0.0;
 		lateSumUsInWindow = 0.0;
 		lateMaxUsInWindow = 0.0;
 		displayedLateAvgUs = 0.0;
@@ -255,7 +253,6 @@ void RetroFE::render() {
 		// --- A. Per-frame math (always runs for accuracy) ---
 		framesSinceFpsUpdate++;
 		accumulatedRenderMs += currentRenderDurationMs;
-		workSumMsInWindow += this->lastWorkMs_;
 		lateSumUsInWindow += this->lastLateUs_;
 		lateMaxUsInWindow = std::max(lateMaxUsInWindow, this->lastLateUs_);
 
@@ -276,7 +273,6 @@ void RetroFE::render() {
 			accumulatedRenderMs = 0.0;
 			waitingForFpsData = false;
 
-			workSumMsInWindow = 0.0;
 			lateSumUsInWindow = 0.0;
 			lateMaxUsInWindow = 0.0;
 		}
@@ -362,7 +358,6 @@ void RetroFE::render() {
 		waitingForFpsData = false;
 		displayedWorkMsLive = 0.0;
 		lastWorkLateUpdatePerfTicks = 0;
-		workSumMsInWindow = 0.0;
 		lateSumUsInWindow = 0.0;
 		lateMaxUsInWindow = 0.0;
 		displayedLateAvgUs = 0.0;
@@ -1000,7 +995,6 @@ bool RetroFE::run() {
 	l.LEDBlinky(1);
 	l.startScript();
 
-	float deltaTime = 0.0f;     // Compatibility alias for animationDt.
 	float animationDt = 0.0f;   // Smoothed visual delta used by Page::update().
 	float timerDt = 0.0f;       // Real/clamped timer delta used by AttractMode.
 
@@ -2971,7 +2965,6 @@ bool RetroFE::run() {
 		wasPacingActive = pacingActive;
 
 		animationDt = smoothedDt;
-		deltaTime = animationDt;
 
 		// Handle screen updates and attract mode
 		if (running)

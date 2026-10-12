@@ -104,7 +104,7 @@ void AmbientMode::activate() {
         if (isFading) {
             int currentFadeTime = SDL_GetTicks() - fadeStartTime;
             firstImageOpacity = 1.0f - static_cast<float>(currentFadeTime) / fadeDuration;
-            firstImageOpacity < 0.0f ? firstImageOpacity = 0.0f : NULL; // Clamp opacity lower value to 0.0f
+            if (firstImageOpacity < 0.0f) firstImageOpacity = 0.0f; // Clamp opacity lower value to 0.0f
             
             // check if we're done fading
             if (firstImageOpacity == 0.0f) {
