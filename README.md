@@ -46,6 +46,14 @@ It's licensed under the terms of the GNU General Public License, version 3 or la
  	* Local Hiscores integration with hi2txt   
 	* And much more!
 
+## Runtime Signals
+- Linux/macOS:
+	- `SIGHUP`: graceful restart (re-read configuration)
+	- `SIGTERM`: graceful shutdown
+	- `SIGUSR1`: live layout XML hot-reload
+- Windows (console mode):
+	- `Ctrl+C`, `Ctrl+Break`, console close/logoff/shutdown events: graceful shutdown
+
 ## System Requirements
 * OS
     * Windows (10 or higher)

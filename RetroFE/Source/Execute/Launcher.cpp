@@ -462,6 +462,10 @@ bool Launcher::run(std::string collection, Item* collectionItem, Page* currentPa
             int timeout = 30;
             config_.getProperty(OPTION_ATTRACTMODELAUNCHRUNTIME, timeout);
             auto attractModeInputCheck = [&inputMonitor]() {
+                // Check for shutdown signal first
+                if (RetroFE::isShutdownRequested()) {
+                    return true;
+                }
                 return inputMonitor.checkInputEvents() != InputDetectionResult::NoInput;
                 };
             WaitResult result = processManager->wait(timeout, attractModeInputCheck, onFrameTick);
@@ -500,6 +504,12 @@ bool Launcher::run(std::string collection, Item* collectionItem, Page* currentPa
         else { // Normal mode
             LOG_INFO("Launcher", "Waiting for launched process to complete. Press quit combo to force quit.");
             auto quitCheck = [&inputMonitor, launchingNestedRetroFE, quitComboEnabled]() {
+                // Check for shutdown signal first
+                if (RetroFE::isShutdownRequested()) {
+                    LOG_INFO("Launcher", "Shutdown signal received. Terminating launched process.");
+                    return true;
+                }
+
                 // Nested RetroFE always owns quit regardless of config
                 if (launchingNestedRetroFE) return false;
 

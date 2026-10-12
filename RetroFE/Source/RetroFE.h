@@ -71,6 +71,14 @@ public:
     MetadataDatabase* getMetaDb();
     uint64_t freq_ = SDL_GetPerformanceFrequency();
 
+    static void     handleSigusr1(int sig);
+    static void     handleSighup(int sig);
+    static void     handleSigterm(int sig);
+#ifdef WIN32
+    static BOOL WINAPI consoleCtrlHandler(DWORD dwCtrlType);
+#endif
+    static bool     isShutdownRequested();
+
 private:
 #ifdef WIN32	
     HWND hwnd;
@@ -190,10 +198,9 @@ private:
     void handleMusicControls(UserInput::KeyCode_E input);
     Page           *loadPage(const std::string& collectionName);
     Page           *loadSplashPage( );
-    static void     handleSigusr1(int sig);
-    static void     handleSighup(int sig);
     static std::atomic<bool> reloadRequested_;
     static std::atomic<bool> sighupReceived_;
+    static std::atomic<bool> shutdownRequested_;
 
     std::vector<std::string> collectionCycle_;
     std::vector<std::string>::iterator collectionCycleIt_;

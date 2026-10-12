@@ -75,6 +75,7 @@
 
 std::atomic<bool> RetroFE::reloadRequested_{false};
 std::atomic<bool> RetroFE::sighupReceived_{false};
+std::atomic<bool> RetroFE::shutdownRequested_{false};
 
 void RetroFE::handleSigusr1(int) {
 	reloadRequested_.store(true);
@@ -83,6 +84,24 @@ void RetroFE::handleSigusr1(int) {
 void RetroFE::handleSighup(int) {
 	sighupReceived_.store(true);
 }
+
+void RetroFE::handleSigterm(int) {
+	shutdownRequested_.store(true);
+}
+
+bool RetroFE::isShutdownRequested() {
+	return shutdownRequested_.load();
+}
+
+#ifdef WIN32
+BOOL WINAPI RetroFE::consoleCtrlHandler(DWORD dwCtrlType) {
+	if (dwCtrlType == CTRL_C_EVENT || dwCtrlType == CTRL_BREAK_EVENT || dwCtrlType == CTRL_CLOSE_EVENT) {
+		shutdownRequested_.store(true);
+		return TRUE; // Indicate that the signal was handled
+	}
+	return FALSE; // Let the system handle other signals
+}
+#endif
 
 RetroFE::RetroFE(Configuration& c)
 	: initialized(false), initializeError(false), initializeThread(NULL), config_(c), db_(NULL), metadb_(NULL),
@@ -962,6 +981,13 @@ bool RetroFE::run() {
 	signal(SIGUSR1, RetroFE::handleSigusr1);
 	// SIGHUP triggers a clean restart (re-reads all configuration)
 	signal(SIGHUP, RetroFE::handleSighup);
+	// SIGTERM triggers graceful shutdown
+	signal(SIGTERM, RetroFE::handleSigterm);
+#endif
+
+#ifdef WIN32
+	// Set console control handler for graceful shutdown on Windows
+	SetConsoleCtrlHandler(RetroFE::consoleCtrlHandler, TRUE);
 #endif
 
 	int initializeStatus = 0;
@@ -1101,6 +1127,15 @@ bool RetroFE::run() {
 		{
 			LOG_INFO("RetroFE", "SIGHUP received – restarting to reload configuration");
 			reboot_ = true;
+			setState(RETROFE_QUIT_REQUEST);
+		}
+
+		// Check for SIGTERM or Windows shutdown signal: trigger graceful shutdown.
+		// Wait until we are out of splash mode and not already shutting down.
+		if (!splashMode && shutdownRequested_.exchange(false)
+			&& state_ != RETROFE_QUIT_REQUEST && state_ != RETROFE_QUIT)
+		{
+			LOG_INFO("RetroFE", "Shutdown signal received – exiting gracefully");
 			setState(RETROFE_QUIT_REQUEST);
 		}
 
