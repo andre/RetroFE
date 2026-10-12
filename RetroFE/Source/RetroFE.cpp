@@ -26,6 +26,7 @@
 #include "Database/HiScores.h"
 #include "Database/IScoredProvider.h"
 #include "Execute/Launcher.h"
+#include "Execute/AmbientMode.h"
 #include "Graphics/Component/ScrollingList.h"
 #include "Graphics/Page.h"
 #include "Graphics/PageBuilder.h"
@@ -2795,6 +2796,57 @@ bool RetroFE::run() {
 			}
 			break;
 
+			// First stage of entering ambient mode: stop the current page, which fades it out visually.
+			case RETROFE_AMBIENT_REQUEST:
+			currentPage_->stop();
+			setState(RETROFE_AMBIENT);
+			break;
+
+			// Second stage: once the fade-out is complete, actually enter ambient mode (blocks until the user exits)
+			case RETROFE_AMBIENT:
+			if (currentPage_->isGraphicsIdle())
+			{
+#ifdef WIN32
+				// stop music
+				Utils::postMessage("MediaplayerHiddenWindow", 0x8001, 75, 0);
+#endif
+				// pause the built-in music player; remember whether we did so we only resume what we paused
+				const bool musicWasPlaying = musicPlayer_ && musicPlayer_->isPlaying();
+				if (musicWasPlaying) musicPlayer_->pauseMusic();
+				currentPage_->setIsLaunched(true);
+				l.LEDBlinky(5); // 5= "Screensaver Start Event" per https://ledblinky.net/downloads/readme.txt
+				int ambientModeMinutesPerImage = 2;
+				config_.getProperty(OPTION_AMBIENTMODEMINUTESPERIMAGE, ambientModeMinutesPerImage);
+				AmbientMode ambientMode(input_, Configuration::absolutePath, ambientModeMinutesPerImage);
+				ambientMode.activate();
+				// ... and we're back! Restart the page, and continue normally
+				currentPage_->start();
+				setState(RETROFE_IDLE);
+				// Needed to avoid a blank screen on exiting from ambient mode.
+				currentPage_->setIsLaunched(false);
+				currentPage_->updateReloadables(0);
+				currentPage_->onNewItemSelected();
+				currentPage_->reallocateMenuSpritePoints(false);
+				currentTime_ = static_cast<float>(SDL_GetTicks()) / 1000;
+				lastLaunchReturnTime_ = currentTime_;
+#ifdef WIN32
+				// restart music
+				Utils::postMessage("MediaplayerHiddenWindow", 0x8001, 76, 0);
+#endif
+				if (musicWasPlaying)
+				{
+					// If the user left before the pause fade-out finished, let it finish first; resumeMusic() refuses to run mid-fade.
+					while (musicPlayer_->isFading())
+					{
+						musicPlayer_->pump();
+						SDL_Delay(5);
+					}
+					musicPlayer_->resumeMusic();
+				}
+				l.LEDBlinky(6); // 6= "Screensaver Stop Event" per https://ledblinky.net/downloads/readme.txt
+			}
+			break;
+
 			// Trigger exit animation, then swap the page
 			case RETROFE_RELOAD_REQUEST:
 			currentPage_->stop();
@@ -3575,13 +3627,16 @@ RetroFE::RETROFE_STATE RetroFE::processUserInput(Page* page) {
 
 		if (input_.keystate(UserInput::KeyCodeQuitCombo1) && input_.newKeyPressed(UserInput::KeyCodeQuitCombo2)) {
 			attract_.reset();
-			bool controllerComboExit = false;
-			config_.getProperty(OPTION_CONTROLLERCOMBOEXIT, controllerComboExit);
-			if (controllerComboExit) {
+			std::string controllerComboExitAction = "QUIT";
+			config_.getProperty(OPTION_CONTROLLERCOMBOEXITACTION, controllerComboExitAction);
+			if (controllerComboExitAction == "QUIT") {
 #ifdef WIN32
 				Utils::postMessage("MediaplayerHiddenWindow", 0x8001, 51, 0);
 #endif
 				return RETROFE_QUIT_REQUEST;
+			}
+			else if (controllerComboExitAction == "AMBIENT") {
+				return RETROFE_AMBIENT_REQUEST;
 			}
 		}
 
