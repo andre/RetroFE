@@ -445,12 +445,12 @@ else()
     endif()
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
         # -O3 is generally safe and preferable for media frontends over -O2
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=x86-64-v2 -msse4.2 -mavx -Wall -Wextra -Wno-deprecated-declarations -funroll-loops")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64-v2 -msse4.2 -mavx -Wall -Wextra -Wno-reorder -Wno-deprecated-declarations -funroll-loops")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -march=x86-64-v2 -msse4.2 -mavx -Wall -Wextra -Wno-deprecated-declarations -Wno-stringop-overflow -funroll-loops")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=x86-64-v2 -msse4.2 -mavx -Wall -Wextra -Wno-reorder -Wno-deprecated-declarations -Wno-stringop-overflow -funroll-loops")
     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
         # Removed -ffast-math to protect Tween interpolation logic
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -mcpu=native -funroll-loops -fstrict-aliasing -Wall -Wextra -Wno-deprecated-declarations")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mcpu=native -funroll-loops -fstrict-aliasing -Wall -Wextra -Wno-reorder -Wno-deprecated-declarations")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -mcpu=native -funroll-loops -fstrict-aliasing -Wall -Wextra -Wno-deprecated-declarations -Wno-stringop-overflow")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mcpu=native -funroll-loops -fstrict-aliasing -Wall -Wextra -Wno-reorder -Wno-deprecated-declarations -Wno-stringop-overflow")
     endif()
     
     message(STATUS "Using C Flags: ${CMAKE_C_FLAGS}")
